@@ -1,0 +1,686 @@
+<html>
+
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particle-api-js@8/dist/particle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    
+    <script>
+    function decodeHtmlEntities(text) {
+  const parser = new DOMParser();
+  const dom = parser.parseFromString(text, 'text/html');
+  return dom.body.textContent;
+}
+
+setTimeout(()=>{
+    console.log('Loading Question');questionFinder();},3000);
+    function questionFinder(){
+        fetch("https://opentdb.com/api.php?amount=10&type=multiple").then(response=>response.json()).then( function(data){
+        var results = data.results;
+        var question = decodeHtmlEntities(data.results[0]["question"]);
+        var answer = decodeHtmlEntities(data.results[0]["correct_answer"]);
+        console.log(results);
+        console.log(question);
+        console.log(answer);
+        var incorrectList=data.results[0]["incorrect_answers"];
+        var answerList=[];
+        var myLuckyNumber = Math.floor(Math.random()*(incorrectList.length+1))
+        incorrectList.forEach(function(new_answer){
+            new_answer = decodeHtmlEntities(new_answer);
+            answerList.push(new_answer);
+        });
+        answerList.splice(myLuckyNumber,0,answer);
+        console.log(answerList);
+        createGame(question,answer,answerList);
+    })
+    .catch(error=>console.error('Error',error));
+    }
+    function createGame(question, correctAnswer, choices){
+        questionArea= document.getElementById("questionArea");
+        questionArea.innerHTML = `<strong>Question:</strong> ${question}`
+        for(let j=0;j<choices.length;j++){
+            console.log(j);
+            groupName = 'choice';
+            container = document.getElementById("quizBox");
+            button = document.createElement("input");
+            button.type = 'radio';
+            button.value=false;
+            button.name=groupName;
+            label=document.createElement("label");
+            if(choices[j]==correctAnswer){
+                button.value=true;
+            }
+            label.appendChild(button);
+            label.appendChild(document.createTextNode(`${choices[j]}`));
+            container.appendChild(label);
+            container.appendChild(document.createElement('br'));
+        }
+        }</script>
+    <script>
+        var particle = new Particle();
+        let mfa_token;
+
+        $(document).ready(function () {
+            // This function is called when the page loads
+
+            $('#loginForm').submit(function (e) {
+                // The Login button on the login page was clicked (or Return pressed)
+                e.preventDefault();
+
+                // Hide the login page so the button goes away
+                $('#loginDiv').css('display', 'none');
+                $('#loginFailedDiv').css('display', 'none');
+                sessionStorage.particleUser = $('#userInput').val();
+
+                // Attempt to log into the Particle cloud
+                $.ajax({
+                    data: {
+                        'client_id': 'particle',
+                        'client_secret': 'particle',
+                        'expires_in': 3600,
+                        'grant_type': 'password',
+                        'password': $('#passwordInput').val(),
+                        'username': $('#userInput').val()
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        if (jqXHR.status === 403) {
+                            // Got a 403 error, MFA required. Show the MFA/OTP page.
+                            mfa_token = jqXHR.responseJSON.mfa_token;
+                            $('#otpDiv').css('display', 'inline');
+                            return;
+                        }
+                        console.log('error ' + textStatus, errorThrown);
+                        $('#loginDiv').css('display', 'inline');
+                        $('#loginFailedDiv').css('display', 'inline');
+                    },
+                    method: 'POST',
+                    success: function (data) {
+                        loginSuccess(data.access_token);
+                    },
+                    url: 'https://api.particle.io/oauth/token',
+                });
+            });
+
+            $('#otpForm').submit(function (e) {
+                // Login on the OTP/MFA form
+                e.preventDefault();
+
+                $('#otpDiv').css('display', 'none');
+
+                $.ajax({
+                    data: {
+                        'client_id': 'particle',
+                        'client_secret': 'particle',
+                        'grant_type': 'urn:custom:mfa-otp',
+                        'mfa_token': mfa_token,
+                        'otp': $('#otpInput').val()
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        // Invalid MFA token
+                        $('#loginDiv').css('display', 'inline');
+                        $('#loginFailedDiv').css('display', 'inline');
+                    },
+                    method: 'POST',
+                    success: function (data) {
+                        loginSuccess(data.access_token);
+                    },
+                    url: 'https://api.particle.io/oauth/token',
+                });
+
+            });
+
+            $('#logoutButton').on('click', function (e) {
+                // Logout button clicked
+                e.preventDefault();
+
+                // Delete the access token from local session storage
+                const accessToken = sessionStorage.particleToken;
+                delete sessionStorage.particleToken;
+                delete sessionStorage.particleUser;
+
+                // Invalidate the token on the cloud side
+                $.ajax({
+                    data: {
+                        'access_token': accessToken
+                    },
+                    method: 'DELETE',
+                    complete: function () {
+                        // Show the login page
+                        $('#mainDiv').css('display', 'none');
+                        $('#loginDiv').css('display', 'inline');
+                        $('#loginFailedDiv').css('display', 'none');
+                    },
+                    url: 'https://api.particle.io/v1/access_tokens/current',
+                });
+            });
+            /////
+    async function triggerPython(cmd) {
+        const statusBox = document.getElementById('status');
+
+        statusBox.style.display = 'block';
+        statusBox.style.background = '#e2e3e5';
+        statusBox.style.color = '#383d41';
+        statusBox.innerText = "Routing request through local Flask server...";
+
+        try {
+            // Target your local Python app instead of ChirpStack directly
+            const response = await fetch('https://serverstuff-uq7q.onrender.com/api/downlink', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command:cmd})
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                statusBox.style.background = '#d4edda';
+                statusBox.style.color = '#155724';
+                statusBox.innerText = "Success! downlink enqueued.\n\n" + JSON.stringify(result, null, 2);
+            } else {
+                statusBox.style.background = '#f8d7da';
+                statusBox.style.color = '#721c24';
+                statusBox.innerText = `Server Error (${response.status}):\n` + (result.message || result.error);
+            }
+        } catch (err) {
+            statusBox.style.background = '#f8d7da';
+            statusBox.style.color = '#721c24';
+            statusBox.innerText = "Failed to connect to Python backend.\nIs 'python app.py' running in your terminal?";
+        }
+    }
+            /////
+            var submitBtn = document.getElementById("submitButton");
+            submitBtn.addEventListener('click',function(e){
+                buttonList=document.querySelectorAll('input[type="radio"]');
+                buttonList.forEach(function(btn){
+                    // console.log('hello');
+                    // console.log(btn.checked);
+                    // console.log(btn.value);
+                    if(btn.checked==true && btn.value=='true'){
+                        console.log("correct");
+                        document.body.style.backgroundColor='rgb(105, 224, 105)';
+                        setTimeout(()=>{
+                            document.body.style.backgroundColor='white';
+                            confetti();
+                        },300)
+                    }
+                    else if(btn.checked==true && btn.value=='false'){
+                        console.log("incorrect");
+                        document.body.style.backgroundColor='red';
+                        setTimeout(()=>{
+                            document.body.style.backgroundColor='white';
+                        },300)
+                    }
+                }
+                );
+            })
+            $('#ledOnButton').on('click', function (e) {
+                e.preventDefault();
+                ledControl('Relay On','Transmit_Cellular');
+            });
+            $('#ledOffButton').on('click', function (e) {
+                e.preventDefault();
+                ledControl('Relay Off','Transmit_Cellular');
+            });
+            $('#ledBLEButton').on('click', function (e) {
+                e.preventDefault();
+                ledControl('On','Transmit_BLE');
+            });
+            $('#delBLEButton').on('click', function (e) {
+                e.preventDefault();
+                ledControl('Off','Transmit_BLE');
+            });
+            $('#ledLoraButton').on('click', function (e) {
+                e.preventDefault();
+                ledControl('On','Transmit_Lora');
+            });
+            $('#delLoraButton').on('click', function (e) {
+                e.preventDefault();
+                ledControl('Off','Transmit_Lora');
+            });
+            $('#loraOnBtn').on('click', function (e) {
+                e.preventDefault();
+                console.log("clicked");
+                triggerPython("on");
+            });
+            $('#loraOffBtn').on('click', function (e) {
+                e.preventDefault();
+                console.log("clicked");
+                triggerPython("off");
+            });
+
+            if (sessionStorage.particleToken) {
+                // We have a Particle access token in the session storage. Probably
+                // refreshed the page, so try to use it. You don't need to log in
+                // every time, you can reuse the access token if it has not expired.
+                $('#loginDiv').css('display', 'none');
+                getDevices();
+            }
+        });
+
+        function loginSuccess(token) {
+            sessionStorage.particleToken = token;
+            getDevices();
+        }
+
+        function getDevices() {
+            // Request the device list from the cloud
+            particle.listDevices({ auth: sessionStorage.particleToken }).then(
+                function (data) {
+                    // Success! Show the main page
+                    $('#mainDiv').css('display', 'inline');
+                    initializeEventListening();
+
+                    // Load the device selector popup
+                    loadDeviceList(data.body);
+                },
+                function (err) {
+                    // Failed to retrieve the device list. The token may have expired
+                    // so prompt for login again.
+                    $('#mainDiv').css('display', 'none');
+                    $('#loginDiv').css('display', 'inline');
+                    $('#loginFailedDiv').css('display', 'inline');
+                }
+            );
+        }
+
+        function loadDeviceList(deviceList) {
+            let html = '';
+
+            $('#userSpan').text(sessionStorage.particleUser);
+
+            deviceList.forEach(function (dev) {
+                // For each device in the user's account, see if the device supports the "led" function call
+                // Also note whether it's online or not.
+                html += '<option value="' + dev.id + '">' + dev.name + (dev.online ? '' : ' (offline)') + '</option>';
+                });
+                // let htmlTransmitter=html
+                // let htmlReceiver = html +'<option value="monitor">Monitor/PC<option>';
+                htmlTr = html+ '<option value= "monitor">Monitor/PC</option>'
+            $('#deviceSelect1').html(htmlTr); //Transmitter
+            $('#deviceSelect2').html(html); //Reciever
+        }
+
+        function changeLed(color,rly){
+            var darkBlue="rgb(2, 2, 92)";
+            var lightBlue='rgb(65, 65, 255)';
+            var darkRed = "rgb(117, 2, 2)";
+            var red = "rgb(255, 0, 0)";
+            switch(color){
+                case "green":
+
+                led = document.getElementById("greenLED");
+                styles = getComputedStyle(led)
+                bgColor = styles.backgroundColor;
+                if (rly==true &&bgColor=='rgb(0, 128, 0)'){
+                    led.animate(
+                        [
+                            {
+                                backgroundColor:'green'
+                            },
+                            {
+                                backgroundColor:'rgb(105, 224, 105)'
+                            }
+                        ],{
+                            duration:300,
+                            iterations:1,
+                            // easing:'ease-in-out'
+                        }
+                        
+                    );
+                    led.style.backgroundColor='rgb(105, 224, 105)';
+                }
+                else if(rly==false &&bgColor=='rgb(105, 224, 105)'){
+                    led.animate(
+                        [
+                            {
+                                backgroundColor:'rgb(105,224,105)'
+                            },
+                            {
+                                backgroundColor:'green'
+                            }
+                        ],{
+                            duration:300,
+                            iterations:1,
+                            // easing:'ease-in-out'
+                        }
+                    );
+                led.style.backgroundColor='rgb(0, 128, 0)';
+                }
+                break;
+                case "blue":
+
+                led = document.getElementById("blueLED");
+                styles = getComputedStyle(led)
+                bgColor = styles.backgroundColor;
+                if (rly==true &&bgColor==darkBlue){
+                    led.animate(
+                        [
+                            {
+                                backgroundColor:darkBlue
+                            },
+                            {
+                                backgroundColor:lightBlue
+                            }
+                        ],{
+                            duration:300,
+                            iterations:1,
+                            // easing:'ease-in-out'
+                        }
+                        
+                    );
+                    led.style.backgroundColor=lightBlue;
+                }
+                else if(rly==false &&bgColor==lightBlue){
+                    led.animate(
+                        [
+                            {
+                                backgroundColor:lightBlue
+                            },
+                            {
+                                backgroundColor:darkBlue
+                            }
+                        ],{
+                            duration:300,
+                            iterations:1,
+                            // easing:'ease-in-out'
+                        }
+                    );
+                led.style.backgroundColor=darkBlue;
+                }
+                break;
+                case "red":
+
+                led = document.getElementById("redLED");
+                styles = getComputedStyle(led)
+                bgColor = styles.backgroundColor;
+                if (rly==true &&bgColor==darkRed){
+                    led.animate(
+                        [
+                            {
+                                backgroundColor:darkRed
+                            },
+                            {
+                                backgroundColor:red
+                            }
+                        ],{
+                            duration:300,
+                            iterations:1,
+                            // easing:'ease-in-out'
+                        }
+                        
+                    );
+                    led.style.backgroundColor=red;
+                }
+                else if(rly==false &&bgColor==red){
+                    led.animate(
+                        [
+                            {
+                                backgroundColor:red
+                            },
+                            {
+                                backgroundColor:darkRed
+                            }
+                        ],{
+                            duration:300,
+                            iterations:1,
+                            // easing:'ease-in-out'
+                        }
+                    );
+                led.style.backgroundColor=darkRed;
+                }
+                break;
+                }
+            }
+
+
+
+
+        function ledControl(cmd,nombre) {
+            //have button to flash device with code
+            // Used to turn on or off the LED by using the Particle.function "led"
+            // const deviceId = $('#deviceSelect').val();
+
+    //         const dropdownTr = document.getElementById("deviceSelect1");
+    // const dropdownRe = document.getElementById("deviceSelect2");
+
+    // if (!dropdownTr || !dropdownRe) {
+    //     $('#statusSpan').text('Error: Dropdown elements not found');
+    //     return;
+    // }
+
+    // const transmitterId = dropdownTr.value;
+    // const receiverId = dropdownRe.value;
+
+    // const transmitterName = dropdownTr.options[dropdownTr.selectedIndex]?.text || '';
+    // const receiverName = dropdownRe.options[dropdownRe.selectedIndex]?.text || '';
+
+    // Clear previous status messages
+    $('#statusSpan').text('Publishing...');
+
+    // 2. Publish the event using the correct Particle SDK payload syntax
+    particle.publishEvent({
+        name: nombre, 
+        data: cmd, 
+        auth: sessionStorage.particleToken,
+        isPrivate: true // Recommended by Particle to prevent global event pollution
+    }).then(
+        function(data) {
+            // Particle SDK returns standard response objects; ensure safe property checking
+            if (data && data.body && data.body.ok) { 
+                $('#statusSpan').text("Event published successfully");
+            } else {
+                $('#statusSpan').text("Event sent, but server response missing 'ok'");
+            }
+        },
+        function(err) {
+            // Output the full error string to diagnose silent API blocks
+            $('#statusSpan').text("Failed to publish event: " + (err.message || JSON.stringify(err)));
+        }
+    );
+    }
+let globalParticleStream = null;
+
+function initializeEventListening() {
+    if (globalParticleStream) {
+        console.log("Stream listener already running.");
+        return;
+    }
+
+    $('#statusSpan').text('Connecting to Particle Event Stream...');
+
+    // By leaving 'name' blank or using a common prefix, we listen to all account events in ONE connection
+    particle.getEventStream({ 
+        name:"Transmit",
+        auth: sessionStorage.particleToken 
+    }).then(
+        function(stream) {
+            globalParticleStream = stream;
+            $('#statusSpan').text('Active: Listening for transmissions...');
+
+            stream.on('event', function(data) {
+                console.log("Incoming event data:", data);
+                
+                // Route the data based on the event name prefix
+                if (data.name.startsWith('Transmit_C')) {
+                    handleTransmissionEvent(data);
+                } 
+                else if (data.name.startsWith('Transmit_R')) {
+                    handleReceiverEvent(data);
+                }
+                else if (data.name.startsWith('Transmit_B')) {
+                    handleTransmissionEvent(data);
+                }
+
+                else if (data.name.startsWith('Transmit_L')){
+                    handleTransmissionEvent(data);
+                }
+            });
+
+            stream.on('error', function(err) {
+                console.error("Stream connection dropped:", err);
+                cleanupStream();
+                setTimeout(initializeEventListening, 5000); // Auto-reconnect safety loop
+            });
+        },
+        function(err) {
+            console.error("Failed to establish event stream:", err);
+            $('#statusSpan').text('Stream Error: Check authorization token.');
+        }
+    );
+}
+
+
+// Handler for 'Monitor_Tr' events
+function handleTransmissionEvent(data) {
+    const dropdownTr = document.getElementById("deviceSelect1");
+    const transmitterId = dropdownTr.value;
+    const transmitterName = dropdownTr.options[dropdownTr.selectedIndex]?.text || '';
+    const container = document.getElementById("dictionary-container1");
+    if (!container) return;
+
+    container.innerHTML = "<h4>Event Sent:</h4>";
+
+    for (const [key, value] of Object.entries(data)) {
+        const p = document.createElement("p");
+        
+        // Match against global transmitter ID or handle API monitor overrides securely
+        if (value === transmitterId|| (value === "api")) {
+            p.innerHTML = `<strong>Device name:</strong> ${transmitterName}`;
+        } else {
+            p.innerHTML = `<strong>${key}:</strong> ${value}`;
+        }
+        container.appendChild(p);
+    }
+    
+    container.appendChild(document.createElement("br"));
+}
+// Handler for 'Monitor_Rec' events
+function handleReceiverEvent(data,comparisonOn,comparisonOff) {
+    const dropdownRe = document.getElementById("deviceSelect2");
+    const receiverId = dropdownRe.value;
+const receiverName = dropdownRe.options[dropdownRe.selectedIndex]?.text || '';
+    const container = document.getElementById("dictionary-container2");
+    if (!container) return;
+
+    container.innerHTML = "<h4>Event Received:</h4>";
+    let relayState = null;
+    let state = data.data;
+
+    for (const [key, value] of Object.entries(data)) {
+        const p = document.createElement("p");
+        if (value === receiverId|| (value === "api")) {
+            p.innerHTML = `<strong>Device name:</strong> ${receiverName || 'Monitor/PC'}`;
+        } else if (key === 'data' && (value === "Relay On"||value === "BLE LED ON"||value==="LORA LED ON")) {
+            relayState = true;
+            p.innerHTML = `<strong>${key}:</strong> ${value}`;
+        } else if (key === 'data' && (value === "Relay Off"||value === "BLE LED OFF"||value==="LORA LED OFF"||value === "BLE DISCONNECT"||value==="LORA DISCONNECT")) {
+            relayState = false;
+            p.innerHTML = `<strong>${key}:</strong> ${value}`;
+        } else {
+            p.innerHTML = `<strong>${key}:</strong> ${value}`;
+        }
+        container.appendChild(p);
+    }
+
+    // Safely fire your LED function if the state changed
+    if (relayState !== null) {
+        if( state== "Relay On"||state=="Relay Off"){
+            changeLed('green', relayState);
+        }
+        else if(state=="BLE LED ON"||state=="BLE LED OFF"||state=="BLE DISCONNECT"){
+            console.log("hi");
+            changeLed('blue',relayState);
+        }
+        else if(state=="LORA LED ON"||state=="LORA LED OFF"||state=="LORA DISCONNECT"){
+            changeLed('red',relayState);
+        }
+    }
+    
+    container.appendChild(document.createElement("br"));
+}
+
+// Clean up function to close network slots cleanly
+function cleanupStream() {
+    if (globalParticleStream) {
+        globalParticleStream.end();
+        globalParticleStream = null;
+    }
+}
+
+window.onbeforeunload = cleanupStream;
+
+    </script>
+</head>
+
+<body>
+    <div id="mainDiv" style="display: none;">
+        <div class = 'scale3'>
+            <div id ="dictionary-container">
+                    <p><strong>Events:</strong></p>
+                <div id="dictionary-container1"></div>
+                <div id="dictionary-container2"></div>
+                <div id="quizBox">
+                    <p id = questionArea style="width:250px">Question: Loading...</p>
+                </div>
+                <button id = 'submitButton'>submit answer</button>
+                <button id = 'qstButton'onclick="location.reload()">new question?<br>(refreshes page)</button>
+            </div>
+        </div>
+        <div class='wrapperScale2 shorten' left-top>
+            <form class = shorten>
+                <p class = shorten>Device Transmitter: <select id="deviceSelect1"></select></p>
+                <p class = shorten>Device Reciever: <select id="deviceSelect2"></select></p>
+                <div id="wrapper">
+                    <h3>Control an LED!</h3>
+                <span id="'totalWrap">
+                        
+                        
+                        <button id="ledOnButton" class="btn-bubbly">LED On</button>&nbsp;<button id="ledOffButton" class="btn-bubbly">LED Off</button>&nbsp;<button id="ledBLEButton" class="btn-bubbly">BLE On</button>&nbsp;<button id="delBLEButton" class="btn-bubbly">BLE Disc.</button>&nbsp;<button id="ledLoraButton" class="btn-bubbly">LoraWAN ON</button>&nbsp;<button id="delLoraButton" class="btn-bubbly">LoraWAN Disc.</button>
+                        <p id="loraWrapper"><button class="btn-bubbly" id="loraOnBtn">LoRaWAN LED ON</button>&nbsp;<button class="btn-bubbly" id="loraOffBtn">LoRaWAN LED OFF</button><div id="status"></div></p>
+                </span>
+                    
+                    
+                    <p>&nbsp;</p>
+                    <p><span id="statusSpan"></span></p>
+                    <div style ="display:flex; align-items: center;">
+                        <div class = led id="greenLED"></div>
+                        <span style="padding-left: 50px;">Cellular Connection</span>
+                    </div>
+                    <p>&nbsp;</p>
+                    <div style ="display:flex; align-items: center;">
+                        <div class = led id="blueLED"></div>
+                        <span style="padding-left: 50px;">BLE Connection</span>
+                    </div>
+                    <p>&nbsp;</p>
+                    <div style ="display:flex; align-items: center;">
+                        <div class = led id="redLED"></div>
+                        <span style="padding-left: 50px;">LoRaWAN Connection</span>
+                    </div>
+                    <p>Logged in as <span id="userSpan"></span> <button id="logoutButton">Log out</button></p>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="wrapperScale">
+        <div id="loginDiv">
+            <h3>Login to Particle</h3>
+            <div id="loginFailedDiv" style="display: none;">
+                <p>Login failed, please try again.</p>
+            </div>
+            <form id="loginForm">
+                <p>Username (Email): <input type="text" id="userInput" /></p>
+                <p>Password: <input type="password" id="passwordInput" /></p>
+                <p><input type="submit" value="Login" /></p>
+            </form>
+        </div>
+    </div>
+    <div id="otpDiv" style="display: none;">
+        <form id="otpForm">
+            <p>One-time password from your authenticator app: <input type="text" id="otpInput" /></p>
+            <p><input type="submit" value="Login" /></p>
+        </form>
+    </div>
+</body>
+
+</html>
